@@ -1,0 +1,4 @@
+numpy~=2.4.0.dev0
+pandas~=3.0.0.dev0+2247.g6a6a1bab4e
+setuptools~=80.9.0
+scipy~=1.17.0.dev0
