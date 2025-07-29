@@ -20,7 +20,6 @@ class HashIter(Hashable, Iterable, Protocol, metaclass=ABCMeta):
             yield None
 
 
-
 @typedictclass
 class roll:
     length: int

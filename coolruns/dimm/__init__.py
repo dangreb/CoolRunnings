@@ -1,3 +1,3 @@
 
 from coolruns.dimm.dimm import Dimm, RootDimm
-from coolruns.dimm.iter import OperativeArchetype
+from coolruns.dimm.iter import IterOps, CallableDeque

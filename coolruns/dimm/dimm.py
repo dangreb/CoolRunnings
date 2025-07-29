@@ -5,15 +5,37 @@ from numpy.lib.stride_tricks import as_strided
 import pandas as pd
 from pandas.core.generic import NDFrame
 
-from typing import Self, Iterable, overload
 from collections import deque
+from abc import ABCMeta, abstractmethod
+from typing import Self, Iterable, overload
 
-from coolruns import CoolRunnings
 from coolruns.typn import hstr, idict
 from coolruns.tool import opt, Singleton
+from coolruns.dimm.iter import CallableDeque
 
 
 __all__ = ["Dimm", "RootDimm"]
+
+
+class DimmDataABC(metaclass=ABCMeta):
+    @property
+    def data(self) -> np.ndarray:
+        return None
+    @data.setter
+    def data(self,_) -> None: ...
+    @property
+    def wdat(self) -> np.ndarray:
+        return None
+    @wdat.setter
+    def wdat(self,_) -> None: ...
+    @abstractmethod
+    def __init__(self, pdat: np.ndarray, wlen: int, shap: tuple, strd: tuple) -> None:...
+    @abstractmethod
+    def __call__(self, data: np.ndarray, columns: Iterable[str]) -> Self: ...
+    @abstractmethod
+    def __len__(self) -> int:...
+    @abstractmethod
+    def free(self):...
 
 
 
@@ -40,7 +62,7 @@ class Dimm:
         self.__parent__.__child__ = self
 
 
-    class DimmData:
+    class DimmData(DimmDataABC):
         """ Namespace for all Incorporated Source Data
             ==========================================
             CoolRunings predicates for optimal data provisioning for multidimensional
@@ -72,8 +94,8 @@ class Dimm:
             across the different windows they appear along their native dimmension.
 
         """
-        __full_data__: np.ndarray = None
-        __dimm_data__: np.ndarray = None
+        __data__: np.ndarray = None
+        __wdat__: np.ndarray = None
         """ 
         Data viewed as from Full Dataframe Scope  
         Preceding dimensionnal shapes and depths inciding
@@ -83,7 +105,7 @@ class Dimm:
             """ Source data as fully reshaped at depth
             :return:
             """
-            return self.__full_data__
+            return self.__data__
         @data.setter
         def data(self,_) -> None: ...
         """ 
@@ -95,13 +117,15 @@ class Dimm:
             """ Source data as shaped at local scope
             :return:
             """
-            return self.__wndw_data__
+            return self.__wdat__
         @wdat.setter
         def wdat(self,_) -> None: ...
 
         def __init__(self, pdat: np.ndarray, wlen: int, shap: tuple, strd: tuple) -> None:
             self.__data__ = as_strided(pdat, shape=((pdat.shape[0]-wlen)+1,)+(wlen,)+pdat.shape[1:], strides=(pdat.strides[0],)+pdat.strides, writeable=False)  # .swapaxes(1,-2)
-            self.__wdat__ = as_strided(self.data, shape=shap+self.data.shape[-1:], strides=strd[:1]+strd, writeable=False)
+            self.__wdat__ = as_strided(self.data, shape=(shap[0]-wlen+1,)+(wlen,)+shap[-1:], strides=strd[:1]+strd, writeable=False)
+            self.kept: list = list()
+            pass
 
         def __call__(self, data: np.ndarray, columns: Iterable[str]) -> Self:
             """ Ingests data for a window-local data scope, rendered by this Dimm object.
@@ -118,6 +142,7 @@ class Dimm:
             :return:
             """
             # TODO:: Receive Window Scope Data
+            self.kept.append(data) # ,cols)
             return self
 
         def __len__(self) -> int:
@@ -136,21 +161,24 @@ class Dimm:
     def data(self,_) -> None: ...
 
 
-    class DimmIterator(deque):
-        def __init__(self, data: DimmData, batch: int = ..., stride: int = 1):
+    class DimmIterator(CallableDeque):
+        def __init__(self, data: DimmDataABC, batch: int = 1024, stride: int = 1):
             self.data: Dimm.DimmData = data
-            self.batch: int = batch or 1
+            self.batch: int = len(data) if not batch or batch is Ellipsis else batch
             self.stride: int = stride,
             blen = len(data)//batch
             dlen = blen*batch
             asym = len(data)-dlen
-            super(DimmIterator, self).__init__([data.wdat[:asym]]+np.vsplit(data.wdat[-dlen:], blen))
-        def __call__(self, result):
-            self.data(np.atleast_2d(np.asarray(result, axis=-1)))
+            super(Dimm.DimmIterator, self).__init__(([data.wdat[:asym]] if asym else [])+np.vsplit(data.wdat[-dlen:], blen))
+            pass
+        def __call__(self, result: np.ndarray, columns: Iterable[str]) -> Self:
+            self.data(data=np.atleast_2d(np.concatenate(result, axis=0)), columns=columns)
+
 
     def __init__(self, parent: Self, name: str, wlen: int) -> None:
         self.parent, self.name, self.wlen  = parent, name, wlen
-        self.__data__ = Dimm.DimmData(pdat=parent.data, wlen=wlen, shap=self.root.data.shape, strd=self.root.data.strides)
+        self.__data__ = Dimm.DimmData(pdat=parent.data.data, wlen=wlen, shap=self.root.data.data.shape, strd=self.root.data.data.strides)
+        #self.__data__ = Dimm.DimmData(pdat=parent.data.data, wlen=wlen, shap=self.root.data.data.shape[:-1], strd=self.root.data.data.strides)
         self.depth = self.root.__registar__(self)
         self.length = len(self.data)
 
@@ -192,14 +220,25 @@ class RootDimm(Dimm):
     @parent.setter
     def parent(self, parent: Self) -> None:...
 
+    class DimmData:
+        __data__: np.ndarray = None
+        @property
+        def data(self) -> np.ndarray:
+            return self.__data__
+        def __init__(self, data: np.ndarray):
+            self.__data__ = data
+
     @overload
     def __init__(self, data: pd.DataFrame):...
     @overload
     def __init__(self, data: np.ndarray, feld: Iterable[hstr] = None):...
     def __init__(self, *args, **kwargs):
         None and super(RootDimm, self).__init__(None, None)
-        data, feld = filter(lambda x: x is not None, (args+(kwargs.get("data", None),kwargs.get("feld",None))))[:2]
-        self.name, self.feld, self.__parent__, self.__data__ = "__root__", list(hstr(feld or "")), data, data if isinstance(data, np.ndarray) else data.values
+        data, feld = tuple(args+(None,None))[:2]
+        data, feld = kwargs.pop('data', data), kwargs.pop('feld', feld)
+        self.name, self.feld, self.__parent__, self.__data__ = "__root__", list(hstr(feld or "")), data, RootDimm.DimmData(data if isinstance(data, np.ndarray) else data.values)
+        self.__idex__ = np.arange(data.shape[0], dtype=opt.window_index_dtype)
+        pass
 
     def __getitem__(self, item: int|str) -> Self|Dimm:
         return self.__reco__[item]

@@ -1,7 +1,6 @@
 
 from coolruns.tool import opt as options
-from coolruns.dimm import Dimm, RootDimm
-from coolruns.dimm import OperativeArchetype
 from coolruns.accessor import CoolRunnings
+from coolruns.dimm import Dimm, RootDimm, IterOps
 
-__all__ = ["CoolRunnings", "Dimm", "RootDimm", "DimmIterator", "OperativeArchetype", "options"]
+__all__ = ["CoolRunnings", "Dimm", "RootDimm", "DimmIterator", "options"]
