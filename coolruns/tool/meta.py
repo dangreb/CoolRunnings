@@ -50,9 +50,7 @@ class ObjectDeque(type):
 class Singleton(type):
     __inst__: dict[type,object] = dict()
     def __call__(cls, *args, **kwargs):
-        if cls not in cls.__inst__.keys():
-            cls.__inst__.get(cls, cls.__inst__.setdefault(cls, super(Singleton, cls).__call__(*args, **kwargs)))
-        return cls.__inst__[cls]
+        return cls.__inst__.get(cls, None) or cls.__inst__.setdefault(cls, super(Singleton, cls).__call__(*args, **kwargs))
 
 
 class ObjectFILO(type):

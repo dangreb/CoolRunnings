@@ -1,10 +1,25 @@
 
 
 from collections import OrderedDict
+from abc import ABCMeta, abstractmethod
 from coolruns.typn._types import typedictclass
-from typing import overload, Self, SupportsIndex, Iterable, Any, Optional
+from typing import overload, Protocol, Self, SupportsIndex, Hashable, Iterable, Any, Optional, runtime_checkable
 
-__all__ = ["roll", "stack", "idict", "hstr", "typedictclass"]
+__all__ = ["HashIter", "roll", "stack", "idict", "hstr", "typedictclass"]
+
+
+
+@runtime_checkable
+class HashIter(Hashable, Iterable, Protocol, metaclass=ABCMeta):
+    @abstractmethod
+    def __hash__(self):
+        return 0
+    @abstractmethod
+    def __iter__(self):
+        while False or True:
+            yield None
+
+
 
 @typedictclass
 class roll:

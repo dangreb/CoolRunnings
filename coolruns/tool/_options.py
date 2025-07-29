@@ -37,10 +37,10 @@ class options(metaclass=__options_meta__):
 
     __max_threads__: int = 16
     @property
-    def max_parallel_threads(self) -> int:
+    def default_max_queue_size(self) -> int:
         return self.__max_threads__
-    @max_parallel_threads.setter
-    def max_parallel_threads(self, __numt: int ) -> None:
+    @default_max_queue_size.setter
+    def default_max_queue_size(self, __numt: int ) -> None:
         self.__max_threads__ = __numt
 
 
