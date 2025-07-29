@@ -121,11 +121,19 @@ class Dimm:
         @wdat.setter
         def wdat(self,_) -> None: ...
 
+        """PROVISORY"""
+        __prvs__: np.ndarray = None
+        __pcol__: list[str] = list
+        @property
+        def prvs(self) -> np.ndarray:
+            return self.__prvs__
+        @prvs.setter
+        def prvs(self,_) -> None: ...
+        """PROVISORY"""
+
         def __init__(self, pdat: np.ndarray, wlen: int, shap: tuple, strd: tuple) -> None:
             self.__data__ = as_strided(pdat, shape=((pdat.shape[0]-wlen)+1,)+(wlen,)+pdat.shape[1:], strides=(pdat.strides[0],)+pdat.strides, writeable=False)  # .swapaxes(1,-2)
             self.__wdat__ = as_strided(self.data, shape=(shap[0]-wlen+1,)+(wlen,)+shap[-1:], strides=strd[:1]+strd, writeable=False)
-            self.kept: list = list()
-            pass
 
         def __call__(self, data: np.ndarray, columns: Iterable[str]) -> Self:
             """ Ingests data for a window-local data scope, rendered by this Dimm object.
@@ -142,7 +150,9 @@ class Dimm:
             :return:
             """
             # TODO:: Receive Window Scope Data
-            self.kept.append(data) # ,cols)
+            #self.kept.append(data) # ,cols)
+            self.prvs = data if self.prvs is None else np.concatenate((self.prvs, data), axis=0)
+            self.__pcol__.extend(columns)
             return self
 
         def __len__(self) -> int:
