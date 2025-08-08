@@ -10,7 +10,7 @@ from pandas.core.generic import NDFrame
 
 from collections import deque
 from abc import ABCMeta, abstractmethod
-from typing import Any, Self, Callable, Iterable, overload
+from typing import Any, Self, Iterable, overload
 
 from concurrent.futures import Future, ThreadPoolExecutor
 

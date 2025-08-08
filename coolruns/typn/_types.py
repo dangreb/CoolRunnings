@@ -1,8 +1,34 @@
 
-from typing import get_type_hints, Union, Optional, get_origin, get_args, Any, Type
+
+import functools
+
+import weakref as wk
+
+from collections import OrderedDict
+from abc import ABCMeta, abstractmethod
+
 from collections.abc import Callable
+from typing import (
+    get_type_hints, Union, get_origin, get_args, Type, overload, Protocol, Self, MutableMapping,
+    SupportsIndex, Hashable, Iterable, Any, Optional, runtime_checkable, Iterator, Reversible
+)
+
+__all__ = ["wk", "wkRef", "HashIter", "roll", "stack", "idict", "hstr", "typedictclass", "Schematics", "Chain", "chain"]
 
 
+def wkrepr(func: Callable):
+    @functools.wraps(func)
+    def wrapper(self):
+        othr = self()
+        return " ".join([f'[ {self.__class__.__name__} : {hex(id(self))} ]', f'[ {othr.__class__.__name__} : {hex(id(othr))} ]', f'( {", ".join(map(str, othr.shape))} )' if hasattr(othr, "shape") else ''])
+    return wrapper
+
+class wkRef(wk.ReferenceType):
+    @wkrepr
+    def __repr__(self) -> str:
+        return super(wkReferenceType, self).__repr__()
+
+wk.ref = wkRef
 
 def typedictclass(cls: Type, *, coerce: bool = False, strict: bool = True):
     """
@@ -113,3 +139,216 @@ def typedictclass(cls: Type, *, coerce: bool = False, strict: bool = True):
             return result
 
     return TypedDictMeta(cls.__name__, (object,), dict(__annotations__=expected_fields))
+
+@runtime_checkable
+class HashIter(Hashable, Iterable, Protocol, metaclass=ABCMeta):
+
+    @abstractmethod
+    def __hash__(self):
+        return 0
+    @abstractmethod
+    def __iter__(self):
+        while False or True:
+            yield None
+
+
+
+class idict(OrderedDict):
+
+    def __getitem__(self, item):
+        if isinstance(item, int):
+            itms = list(self.keys())
+            return self.get(itms[item], None) if itms and item < len(itms) else None
+        return super(idict, self).__getitem__(item)
+    def __getattr__(self, item):
+        return self[item] if item in self else None  # super(idict, self).__getattribute__(item)
+    def __len__(self) -> int:
+        return len(self.keys())
+    def __iter__(self):
+        yield from self.items()
+    def __reversed__(self):
+        yield from reversed(self.items())
+
+
+
+class Schematics(Iterator, Reversible, metaclass=ABCMeta):
+    __slots__ = ()
+    @property
+    @abstractmethod
+    def root(self) -> Self: ...
+    @property
+    @abstractmethod
+    def child(self) -> Self: ...
+    @property
+    @abstractmethod
+    def parent(self) -> Self: ...
+    @property
+    @abstractmethod
+    def depth(self) -> Self: ...
+
+
+class PrevNext(Iterator, Reversible, metaclass=ABCMeta):
+    def __init_subclass__(cls, **kwargs):
+        [setattr(cls, *args) for args in kwargs.items()]
+
+
+class Chain(PrevNext):
+    __slots__ = ("alias", "__mapp__", "__last__", "__root__", "__step__", "__child__", "__parent__")
+    @property
+    @abstractmethod
+    def last(self) -> Self: ...
+    @property
+    @abstractmethod
+    def root(self) -> Self: ...
+    @property
+    @abstractmethod
+    def step(self) -> Self: ...
+    @property
+    @abstractmethod
+    def child(self) -> Self: ...
+    @property
+    @abstractmethod
+    def parent(self) -> Self: ...
+
+    def __next__(self):
+        return self.child
+    def __iter__(self):
+        knot = self
+        while knot:
+            yield knot
+            knot = knot.child
+    def __reversed__(self):
+        knot = self
+        while knot:
+            yield knot
+            knot = knot.parent
+    def __getitem__(self, item: str|int):
+        return self.__mapp__.get(item, None) or self.__mapp__.get(self.last.step+item+1 if isinstance(item, int) and item < 0 else item, None)
+
+    def __init_subclass__(cls, **kwargs):
+        [setattr(cls, *args) for args in kwargs.items()]
+
+    #@abstractmethod
+    #def __copy__(self): ...
+
+    #def __lshift__(self, other: Self) -> Self: ...
+    @abstractmethod
+    def attach(self, alias: Hashable = None, **kwargs) -> Self: ...
+    @abstractmethod
+    def detach(self, _qtd: int, /) -> Self: ...
+
+
+class chain(Chain):
+
+    @property
+    def root(self) -> Chain:
+        return self.__root__
+    @property
+    def last(self) -> Chain:
+        return self.__last__
+    @property
+    def step(self) -> int:
+        return self.__step__
+    @property
+    def child(self) -> Chain:
+        return self.__child__
+    @property
+    def parent(self) -> Chain:
+        return self.__parent__
+
+    def __init__(self, alias: Hashable = None, **kwargs) -> None:
+        self.__mapp__ = dict()
+        self.__last__ = self
+        self.__root__ = self
+        self.__step__ = 0
+        self.__child__ = None
+        self.__parent__ = None
+        self.alias = alias or self.allonym()
+        [hasattr(self, anam) or setattr(self, anam, aval) for anam, aval in kwargs.items()]
+        self.__mapp__[self.step] = self.__mapp__[str(self.alias)] = self
+
+    def __len__(self):
+        return len(self.__mapp__)
+
+    """
+    def __copy__(self):
+        root = self.__class__(alias=self.root.alias, **vars(self.root))
+        [root.attach(link.alias, **vars(link)) for link in next(self.root)]
+        return root
+    """
+
+    def allonym(self) -> str:
+        return self.step and f'_{self.step}' or hex(id(self))[2:]
+
+    @classmethod
+    def __make_link__(cls, alias: Hashable = None, **kwargs) -> Self:
+        return cls(alias=alias, **kwargs)
+
+    def attach(self, alias: Hashable = None, **kwargs) -> Self:
+        link = self.__class__.__make_link__(alias=alias, **kwargs)
+        link.__root__ = self.root
+        link.__step__ = self.last.step+1
+        link.alias = alias or link.allonym()
+        link.__child__ = None
+        del link.__mapp__
+        self.root.__mapp__[link.step] = self.root.__mapp__[str(link.alias)] = link
+        self.root.__mapp__[0] = self.root
+        self.last.__child__ = link
+        link.__parent__ = self.last
+        for knot in self:
+            knot.__last__ = link
+        return link
+
+    def detach(self, _qtd: int, /, ) -> Self:
+        for knot in [knot for idex, knot in enumerate(list(reversed(self.root.__mapp__.values()))[:_qtd*2]) if idex%2]:
+            self.root.__mapp__.pop(knot.alias)
+            self.root.__mapp__.pop(knot.step)
+            knot.parent and setattr(knot.parent, "__child__", None)
+            [hasattr(knot, slot) and delattr(knot, slot) for slot in knot.__slots__+tuple(knot.__dict__.keys())]
+        return self
+
+    def __free__(self):
+        """ palestine """
+        self.detach(self.last.step-self.step+1)
+        pass
+
+
+@typedictclass
+class roll:
+    wlen: int
+    name: Optional[str]
+
+class hstr(str):
+    """ Hardened String
+        ===============
+        A string-like type that:
+            - Will not iterate through its characters
+            - Will only convert str instances
+    """
+    def __new__(cls, value='', *args, **kwargs):
+        return super(hstr, cls).__new__(cls, value, *args, **kwargs) if isinstance(value, str) else [value]
+    def __iter__(self):
+        yield self
+
+class stack(list):
+
+    def __getitem__(self, idex: slice|int):
+        return super(stack, self).__getitem__(idex) if isinstance(idex, slice) or idex < len(self) else None
+    def __call__(self):
+        return self[-1] if len(self) else None
+    def pop(self, index: SupportsIndex = -1) -> Self:
+        return super(stack, self).pop(index) if len(self) else None
+    def append(self, __object: Any, /) -> Self:
+        super(stack, self).append(__object)
+        return self
+    def extend(self, __iterable: Iterable[Any], /) -> Self:
+        super(stack, self).extend(__iterable)
+        return self
+    @overload
+    def insert(self, __object: Any, /, *args) -> Self: ...
+    @overload
+    def insert(self, __index: SupportsIndex, __object: Any, /, *args) -> Self: ...
+    def insert(self, *args) -> Self:
+        __index, __object = args[:2] if len(args) >= 2 else (0, args[0])
+        super(stack, self).insert(__index, __object)
+        return self

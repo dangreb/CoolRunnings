@@ -1,9 +1,12 @@
 
 
+from abc import ABCMeta
 from collections import deque
 from typing import Self, Any, Hashable
 
 from coolruns.typn import stack
+
+__all__ = ["ObjectCatallog", "ObjectDeque", "Singleton", "ObjectFILO", "MetaConstructor", "MetaCaster"]
 
 
 
@@ -47,7 +50,7 @@ class ObjectDeque(type):
         return self.roster.get(hndl, None)
 
 
-class Singleton(type):
+class Singleton(ABCMeta):
     __inst__: dict[type,object] = dict()
     def __call__(cls, *args, **kwargs):
         return cls.__inst__.get(cls, None) or cls.__inst__.setdefault(cls, super(Singleton, cls).__call__(*args, **kwargs))

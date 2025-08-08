@@ -1,3 +1,2 @@
 
-from coolruns.dimm.dimm import Dimm, RootDimm
-from coolruns.dimm.iter import IterOps, CallableDeque
+from coolruns.dimm.dimm import Dimm, RootDimm, DimmIterator, IterOps, CallableDeque
