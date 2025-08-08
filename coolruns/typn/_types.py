@@ -152,7 +152,6 @@ class HashIter(Hashable, Iterable, Protocol, metaclass=ABCMeta):
             yield None
 
 
-
 class idict(OrderedDict):
 
     def __getitem__(self, item):
@@ -168,7 +167,6 @@ class idict(OrderedDict):
         yield from self.items()
     def __reversed__(self):
         yield from reversed(self.items())
-
 
 
 class Schematics(Iterator, Reversible, metaclass=ABCMeta):
@@ -311,6 +309,7 @@ class chain(Chain):
         """ palestine """
         self.detach(self.last.step-self.step+1)
         pass
+
 
 
 @typedictclass
