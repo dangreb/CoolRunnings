@@ -2,7 +2,7 @@
 import inspect
 
 #import pydevd as pedv
-from coolruns.tool import Singleton
+from coolruns.typn import Singleton
 
 __all__ = ["PyDBOps"]
 

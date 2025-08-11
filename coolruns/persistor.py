@@ -1,19 +1,14 @@
-
-import gc
-import uuid
-import copy
-
 import functools
 
 from abc import ABCMeta
-from typing import ClassVar, Self, Callable
+from typing import Callable
 
 from pandas.core.generic import NDFrame, Index
 
 
-from coolruns.typn import wk, wkRef
-from coolruns.tool.utils import LifetimeHook, gcollect
-from coolruns.tool._pydev import PyDBOps
+from coolruns._typing import wk
+from coolruns.hooks import Hook, gcollect
+
 
 _void = lambda *_,**__: None
 _tame = lambda *_,**__: True
@@ -32,8 +27,7 @@ class AccessorPersistor(ABCMeta):
 
     @gcollect
     def __call__(cls, pobj: NDFrame|Index, *args, **kwargs):
-        #PyDBOps()()
-        pobj.attrs.get(cls, None) or pobj.attrs.update({cls:LifetimeHook()})
+        pobj.attrs.get(cls, None) or pobj.attrs.update({cls:Hook()})
         cls.held.get(pobj.attrs[cls], None) or cls.held.update({pobj.attrs[cls]:super(AccessorPersistor, cls).__call__(*args, **kwargs)})
         return cls.held[pobj.attrs[cls]].__complete__(pobj)
 

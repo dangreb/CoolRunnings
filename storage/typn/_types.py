@@ -13,7 +13,7 @@ from typing import (
     SupportsIndex, Hashable, Iterable, Any, Optional, runtime_checkable, Iterator, Reversible
 )
 
-__all__ = ["wk", "wkRef", "HashIter", "roll", "stack", "idict", "hstr", "typedictclass", "Schematics", "Chain", "chain"]
+__all__ = ["wk", "wkRef", "HashIter", "roll", "stack", "idict", "hstr", "typedictclass", "Chain", "chain", "Singleton"]
 
 
 def wkrepr(func: Callable):
@@ -153,7 +153,6 @@ class HashIter(Hashable, Iterable, Protocol, metaclass=ABCMeta):
 
 
 class idict(OrderedDict):
-
     def __getitem__(self, item):
         if isinstance(item, int):
             itms = list(self.keys())
@@ -169,25 +168,39 @@ class idict(OrderedDict):
         yield from reversed(self.items())
 
 
-class Schematics(Iterator, Reversible, metaclass=ABCMeta):
-    __slots__ = ()
-    @property
+
+class Catalog(MutableMapping, metaclass=ABCMeta):
+    __catalog__: MutableMapping[Hashable, Self]
+    def __class_getitem__(cls, item:Hashable) -> Self:
+        return cls.__catalog__.get(item, None)
+    def __init_subclass__(cls, maptype: type[MutableMapping] = dict, **kwargs):
+        [setattr(cls, *args) for args in kwargs.items()]
+        cls.__catalog__ = maptype()
     @abstractmethod
-    def root(self) -> Self: ...
-    @property
-    @abstractmethod
-    def child(self) -> Self: ...
-    @property
-    @abstractmethod
-    def parent(self) -> Self: ...
-    @property
-    @abstractmethod
-    def depth(self) -> Self: ...
+    def __init__(self, item:Hashable, *args, **kwargs):
+        raise NotImplementedError
+    def __delitem__(self, key, /):
+        del self.__catalog__[key]
+    def __getitem__(self, key, /):
+        return self.__catalog__.get(key, defaults)
+    def __setitem__(self, key, value, /):
+        self.__catalog__[key] = value
+    def __len__(self):
+        len(self.__catalog__)
+    def __iter__(self):
+        yield from self.__catalog__.items()
+
+
+class Singleton(ABCMeta):
+    __inst__: dict[type,object] = dict()
+    def __call__(cls, *args, **kwargs):
+        return cls.__inst__.get(cls, None) or cls.__inst__.setdefault(cls, super(Singleton, cls).__call__(*args, **kwargs))
 
 
 class PrevNext(Iterator, Reversible, metaclass=ABCMeta):
     def __init_subclass__(cls, **kwargs):
         [setattr(cls, *args) for args in kwargs.items()]
+
 
 
 class Chain(PrevNext):
@@ -234,6 +247,7 @@ class Chain(PrevNext):
     def attach(self, alias: Hashable = None, **kwargs) -> Self: ...
     @abstractmethod
     def detach(self, _qtd: int, /) -> Self: ...
+
 
 
 class chain(Chain):
