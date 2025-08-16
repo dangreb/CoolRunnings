@@ -1,7 +1,6 @@
 
 
-from coolruns.accessor import CoolRunnings, Dimm
-from coolruns.iterops import DimmIterator, IterOps
+from coolruns.iterops import IterOps
+from coolruns.accessor import CoolRunnings
 
-
-__all__ = ["CoolRunnings", "Dimm", "DimmIterator", "IterOps"]
+__all__ = ["CoolRunnings", "IterOps"]
