@@ -1,9 +1,9 @@
 
-## lWins 
+## Cool Runnings - for pandas 
 
-### Multidimensional Sliding Windows for Pandas Dataframes
+### Multidimensional, deep oriented Sliding Windows for Pandas
 
-- Offers dimmensional scope representations for local data handling
+- Offers dimmensional scope representations for window-local data processing
 - Uses NumPy striding techniques for fast and lean performance profile
 - Built with Accessors extension techniques for seamless incorporation
 
