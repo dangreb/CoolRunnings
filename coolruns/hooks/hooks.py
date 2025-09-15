@@ -6,9 +6,10 @@ import random
 
 import weakref as wk
 
+from abc import ABCMeta
 from enum import Enum, auto
 
-from typing import Any, Self, Iterable, Iterator
+from typing import Any, Self, Iterable, Iterator, Hashable
 
 
 __all__ = ["HookSentinel", "Hook", "onhook"]
@@ -24,10 +25,8 @@ class onhook(Enum):
     delete = auto()
 
 
-class Hook(frozenset):
-    __slots__ = ()
-    def __new__(cls, *args, **kwargs) -> Self:
-        return super(Hook, cls).__new__(cls, [uuid.uuid4().bytes])
+class Hook(Hashable):
+    __slots__ = ('__weakref__',)
     def __class_getitem__(cls, articles: tuple[Any]) -> Iterator[tuple[Self, Any]]:
         yield from ((cls(), article) for article in articles)
     def __hash__(self) -> int:
@@ -37,7 +36,7 @@ class Hook(frozenset):
         return sentinel().callback(onhook.copy, article, memo=memo) if article else None
 
 
-class SentinelMeta(type):
+class SentinelMeta(ABCMeta):
     __inst__: dict[type ,object] = dict()
     def __call__(cls, *args, **kwargs):
         return cls.__inst__.get(cls, None) or cls.__inst__.setdefault(cls, super(SentinelMeta, cls).__call__(*args, **kwargs))
@@ -46,16 +45,6 @@ class SentinelMeta(type):
 
 
 class HookSentinel(wk.WeakKeyDictionary, metaclass=SentinelMeta):
-    __evnt__: onhook = None
-    @property
-    def evnt(self):
-        return self.__evnt__
-    @evnt.setter
-    def evnt(self, value):
-        self.__evnt__ = value
-
-    def __bool__(self):
-        return True
 
     def __call__(self, *articles, **kwargs) -> Iterable[Hook]:
         return [self.__enroll__(hook, article) for hook, article in Hook[articles]]
@@ -70,9 +59,13 @@ class HookSentinel(wk.WeakKeyDictionary, metaclass=SentinelMeta):
             if hook in sentinel[-1]:
                 return sentinel[0], sentinel[-1][hook]
         return HookSentinel(), None
+
     def __getitem__(self, hook: Hook) -> wk.ProxyType:
         outs = super(HookSentinel, self).get(hook, None)
         return wk.proxy(outs) if outs else None
+
+    def __bool__(self):
+        return True
 
     def __byps__(self) -> str:
         """
@@ -86,28 +79,17 @@ class HookSentinel(wk.WeakKeyDictionary, metaclass=SentinelMeta):
         from datetime import datetime, timedelta
         ## !!!! ========== !!!! #
         stk = "\n".join([f'{f.lineno:5} | {f.filename}' for f in inspect.stack()])
-        #if all([stk.find(fnm)+1 for fnm in [r"pandas\io\formats\format.py", r"pydevd_repr_utils.py", r"reprlib.py"]]):
         if all([stk.find(fnm)+1 for fnm in [r"pydevd_repr_utils.py", r"reprlib.py"]]):
-            print(stk)
-            print(datetime.now())
-            print("\n\n")
+            #print(stk)
+            #print(datetime.now())
+            #print("\n\n")
             return True
         return False
-    def callback(self, event: onhook, article: Any, memo: dict[int, Any]|None = None, **kwargs):
-        """ Callback for Hook Events
-        :param event: Event type. See :class:`coolruns.hooks.onhook`
-        :param article: Object associated to the Hook
-        :param memo: The deepcopy memo payload
-        :param kwargs: Additional registered arguments
-        """
-        if self.__byps__(): return None # TODO::Provisory/Fix
 
-        self.evnt = event
-        match event:
-            case onhook.copy:
-                outs = copy.deepcopy(article, memo=memo)
-            case onhook.delete:
-                outs = article.__free__(article)
-            case _: ...
-        self.evnt = None
-        return outs
+    def callback(self, event: onhook, article: Any, memo: dict[int, Any]|None = None, **kwargs):
+        if self.__byps__(): return None # TODO::Provisory/Fix
+        if event is onhook.copy:
+            return copy.deepcopy(article, memo=memo)
+        if event is onhook.delete:
+            return article.__free__()
+        return None

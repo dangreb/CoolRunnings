@@ -1,46 +1,25 @@
 
-
-from abc import ABCMeta, abstractmethod
-
-from typing import Self, Hashable, Iterator, Reversible
-
-__all__ = ["Chain", "Chain", "Singleton", "ObjectCatalog"]
+from typing import Self, Hashable, Iterator, Reversible, Container
 
 
-def gcollect(func=None, /, early=True, late=False):
-    def wrapper(fn):
-        def _collect_call(*args, **kwargs):
-            gc.collect() if early else ...
-            resu = fn(*args, **kwargs)
-            gc.collect() if late else ...
-            return resu
-        return _collect_call
-    return wrapper(func) if func else wrapper
+__all__ = ["Chain"]
 
 
-class Singleton(ABCMeta):
-    __inst__: dict[type ,object] = dict()
-    def __call__(cls, *args, **kwargs):
-        return cls.__inst__.get(cls, None) or cls.__inst__.setdefault(cls, super(Singleton, cls).__call__(*args, **kwargs))
-    def __iter__(cls):
-        yield from cls.__inst__.items()
-
-
-class Chain(Iterator, Reversible, metaclass=ABCMeta):
+class Chain(Iterator, Reversible, Container):
     @property
-    def root(self) -> Chain:
+    def root(self) -> Self:
         return self.__root__
     @property
-    def last(self) -> Chain:
+    def last(self) -> Self:
         return self.__last__
     @property
     def step(self) -> int:
         return self.__step__
     @property
-    def child(self) -> Chain:
+    def child(self) -> Self:
         return self.__child__
     @property
-    def parent(self) -> Chain:
+    def parent(self) -> Self:
         return self.__parent__
     @classmethod
     def __link__(cls, alias: Hashable = None, **kwargs) -> Self:
@@ -72,6 +51,8 @@ class Chain(Iterator, Reversible, metaclass=ABCMeta):
         """ palestine """
         self.detach(self.last.step-self.step+1)
         pass
+    def __new__(cls, alias: Hashable = None, **kwargs) -> Self:
+        return super(Chain, cls).__new__(cls)
     def __init__(self, alias: Hashable = None, **kwargs) -> None:
         self.__mapp__ = dict()
         self.__last__ = self
@@ -83,12 +64,12 @@ class Chain(Iterator, Reversible, metaclass=ABCMeta):
         [hasattr(self, anam) or setattr(self, anam, aval) for anam, aval in kwargs.items()]
         self.__mapp__[self.step] = self.__mapp__[str(self.alias)] = self
     def __len__(self):
-        return len(self.__mapp__)
+        return int(len(self.__mapp__)//2)
     def __next__(self):
         return self.child
     def __iter__(self):
         knot = self
-        for _ in range(self.last.step+1):
+        for _ in range(int(len(self.root.__mapp__)//2)):
             yield knot
             knot = knot.child
     def __reversed__(self):
@@ -96,6 +77,8 @@ class Chain(Iterator, Reversible, metaclass=ABCMeta):
         while knot:
             yield knot
             knot = knot.parent
+    def __contains__(self, item):
+        return item in self.__mapp__
     def __getitem__(self, item: str|int):
         return self.__mapp__.get(item, None) or self.__mapp__.get(self.last.step+item+1 if isinstance(item, int) and item < 0 else item, None)
 

@@ -13,7 +13,4 @@
 
 """
 
-from persistor.hooks import Hook, HookSentinel
-from persistor.persistor import PersistentAccessor
-
-__all__ = ["Hook", "HookSentinel", "PersistentAccessor"]
+from coolruns.persistor.persistor import PersistentAccessor, gcollect
