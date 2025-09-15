@@ -8,6 +8,7 @@ from coolruns.dimms import Dimm, DimmBase
 from coolruns.persistor import PersistentAccessor, gcollect
 
 
+
 class RootDimm(DimmBase):
     __base__: DimmBase
 
@@ -31,7 +32,6 @@ class RootDimm(DimmBase):
         return self.__getattribute__(name) if name in dir(self) else getattr(self.__base__, name, None)
     def __getitem__(self, item: str|int):
         return self[item] if item in self else self.__base__[item]
-
 
 
 class CoolRunnings(DimmBase, PersistentAccessor, handle="coolruns", target=pd.DataFrame):
