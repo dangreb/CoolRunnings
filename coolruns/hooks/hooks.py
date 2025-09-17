@@ -15,11 +15,6 @@ from typing import Any, Self, Iterable, Iterator, Hashable
 __all__ = ["HookSentinel", "Hook", "onhook"]
 
 
-def allonym() -> str:
-    yield random.shuffle([]) #TODO::
-    pass
-
-
 class onhook(Enum):
     copy = auto()
     delete = auto()
