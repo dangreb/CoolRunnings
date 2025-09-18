@@ -54,7 +54,7 @@ class Dimm(DimmBase):
 
     def __init__(self, root: DimmBase, wlen: int, alias: Hashable = None, **kwargs):
         super(Dimm, self).__init__(alias, wlen=wlen, **kwargs)
-        self.__data__ = as_strided(root.last.data, shape=(root.last.shape[0]-wlen+1,)+(wlen,)+root.last.shape[1:], strides=(root.last.stride[0],)+root.last.stride, writeable=False)
+        self.__data__ = as_strided(root.last.data, shape=(root.last.shape[0]-wlen+1,)+root.last.shape[1:-1]+(wlen,root.last.shape[-1]), strides=(root.last.stride[0],)+root.last.stride, writeable=False)
         self.__wdat__ = as_strided(self.data, shape=(root.shape[0]-wlen+1,)+(wlen,)+root.shape[-1:], strides=root.stride[:1]+root.stride, writeable=False)
         self.__dloc__ = np.empty(self.wdat.shape[0], dtype=np.int64)
 

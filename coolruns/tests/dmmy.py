@@ -13,20 +13,24 @@ if __name__ == "__main__":
     from datetime import datetime
     otim = lambda dlta:int(((dlta.seconds*1E+6)+dlta.microseconds)//1e+3)
     mark = datetime.now()
-
-    dlen = 1024*1024*10
-
+    pass
+    dlen = 1024*1024*100
+    pass
     print(f"{datetime.now()} | {otim(datetime.now()-mark)} | Start")
-
+    pass
     data = pd.DataFrame(**fastdata(dlen=dlen, edat="2025-07-01", datyp=np.uint32, ))
-    data.coolruns(16, "dimm1")(32, "dimm2")(64, "dimm3")
-
+    data.coolruns(64, "dimm64")(32, "dimm32")(16, "dimm16")
+    pass
+    print(f"{datetime.now()} | {otim(datetime.now()-mark)} | ForLoop")
+    pass
+    floo = [dimm for dimm in data.coolruns]
+    pass
     print(f"{datetime.now()} | {otim(datetime.now()-mark)} | IterOps")
-
-    wrto = WindowRatio(data.coolruns, blen=64).RunOper(maxw=8)()
-
+    pass
+    #wrto = RunOper(maxw=8)(WindowRatio(data.coolruns, blen=max(64, dlen//1024)))
+    wrto = WindowRatio(data.coolruns, blen=max(64, dlen//1024*100)).RunOper(maxw=8)
+    pass
     print(f"{datetime.now()} | {otim(datetime.now()-mark)} | Finish")
-
     breakpoint()
 
 
