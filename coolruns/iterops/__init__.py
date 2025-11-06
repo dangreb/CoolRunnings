@@ -1,6 +1,4 @@
 
 
-from coolruns.iterops.iterops import IterOps, RunOper
-
-
-__all__ = ["IterOps", "RunOper"]
+from coolruns.iterops.iterops import *
+from coolruns.iterops.operations import *

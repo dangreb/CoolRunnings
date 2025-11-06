@@ -1,2 +1,2 @@
 
-from coolruns.tests.helpers import *
+from coolruns.tests.sampler import *

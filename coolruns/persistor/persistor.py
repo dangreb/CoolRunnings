@@ -15,6 +15,7 @@ from coolruns.hooks import HookSentinel, Hook
 __all__ = ["PersistentAccessor", "gcollect"]
 
 
+
 def gcollect(func=None, /, early=True, late=False):
     def wrapper(fn):
         def _collect_call(*args, **kwargs):
@@ -25,6 +26,7 @@ def gcollect(func=None, /, early=True, late=False):
         return _collect_call
     return wrapper(func) if func else wrapper
 
+
 class UID(Hook):
     __slots__ = ("cls",)
     def __init__(self, cls: type):
@@ -34,18 +36,19 @@ class UID(Hook):
     def __deepcopy__(self, memo):
         return next((self for d in memo.values() if isinstance(d, self.cls.target)), None)
 
+
 class AccessorPersistor(ABCMeta):
     __uid__: UID
 
     __sentinel__: type[HookSentinel] = HookSentinel
-    __catalog__: dict[type,wk.WeakKeyDictionary[Hook,object]] = dict()
+    __catalogue__: dict[type,wk.WeakKeyDictionary[Hook,object]] = dict()
 
     @property
     def sentinel(cls) -> HookSentinel:
         return cls.__sentinel__()
     @property
-    def catalog(cls) -> wk.WeakKeyDictionary[Hook,object]:
-        return cls.__catalog__.get(cls, None) or cls.__catalog__.setdefault(cls, wk.WeakKeyDictionary())
+    def catalogue(cls) -> wk.WeakKeyDictionary[Hook,object]:
+        return cls.__catalogue__.get(cls, None) or cls.__catalogue__.setdefault(cls, wk.WeakKeyDictionary())
 
     __handle__: str
     __target__: type[PandasObject]
@@ -58,10 +61,11 @@ class AccessorPersistor(ABCMeta):
         return self.__target__
 
     def __call__(cls, obj: PandasObject, /, *args, **kwargs):
-        obj.attrs.get(cls.__uid__, None) or obj.attrs.update({cls.__uid__:cls.sentinel(super(AccessorPersistor, cls).__call__(obj, *args, **kwargs)).pop()})
-        cls.catalog.get(obj.attrs[cls.__uid__], None) or cls.catalog.setdefault(obj.attrs[cls.__uid__], cls.sentinel[obj.attrs[cls.__uid__]])
-        cls.catalog[obj.attrs[cls.__uid__]].__obj__, cls.catalog[obj.attrs[cls.__uid__]].__hook__ = wk.ref(obj), wk.ref(obj.attrs[cls.__uid__])
-        return cls.catalog[obj.attrs[cls.__uid__]]
+        hook = obj.attrs.get(cls.__uid__) or obj.attrs.update({cls.__uid__:cls.sentinel(super(AccessorPersistor, cls).__call__(obj=obj, *args, **kwargs))}) or obj.attrs[cls.__uid__]
+        inst = cls.catalogue.get(hook) or cls.catalogue.setdefault(hook, cls.sentinel[hook])
+        inst.__obj__, inst.__hook__ = wk.ref(obj), wk.ref(hook)
+        return inst
+
 
 class PersistentAccessor(metaclass=AccessorPersistor):
 
@@ -75,17 +79,24 @@ class PersistentAccessor(metaclass=AccessorPersistor):
     def hook(self) -> wk.ReferenceType[Hook]:
         return self.__hook__
 
-    def __init_subclass__(cls, *, handle: str = None, sentinel: type[HookSentinel] = HookSentinel, target: type[PandasObject] = PandasObject, **kwargs):
+
+    @classmethod
+    def registar(cls, handle: str, target: type[PandasObject]):
+        if isinstance(handle, str) and isinstance(handle, str) and issubclass(target, PandasObject):
+            cls.__handle__, cls.__target__ = handle, target
+            register_accessor(name=handle, cls=target)(cls)
+        cls.registar = lambda *_,**__: None
+
+    def __init_subclass__(cls, *, handle: str = None, target: type[PandasObject] = None, sentinel: type[HookSentinel] = HookSentinel, **kwargs):
         cls.__uid__ = UID(cls)
-        cls.__handle__ = handle
-        cls.__target__ = target
-        cls.__sentinel__ = sentinel
-        handle and register_accessor(name=handle, cls=target)(cls)
+        cls.__sentinel__ = sentinel if issubclass(sentinel, HookSentinel) else HookSentinel
+        handle and target and cls.registar(handle=handle, target=target)
 
-    def __call__(self, *args, **kwargs):...
+    #def __call__(self, *args, **kwargs):...
 
+    @gcollect
     def __deepcopy__(self, memo: dict[int, Any]|None):
-        return getattr(next((self.__class__(d) for d in memo.values() if isinstance(d,self.__class__.target)), None), "hook", lambda: None)()
+        return next((self.__class__(dest).hook() for dest in memo.values() if isinstance(dest,self.__class__.target)))
 
     def __bool__(self) -> bool:
         return True

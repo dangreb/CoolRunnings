@@ -1,106 +1,132 @@
+
 import os
 
 import numpy as np
 import pandas as pd
 
+from string import ascii_lowercase
+from threading import Thread, RLock
+
 from abc import ABCMeta, abstractmethod
-from typing import Any, Iterable, final, TypeAlias
+from typing import Self, Mapping, Sequence, Callable, MutableSequence
 
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 
-from coolruns.dimms import DimmBase
+__void__ = lambda *_,**__: None
 
 
 __all__ = ["IterOps", "RunOper"]
 
 
 
-OubdType: TypeAlias = tuple[np.ndarray, Iterable[str], pd.Index]|tuple[np.ndarray, Iterable[str], Iterable[Any]]|pd.DataFrame
 
+class IterOps(metaclass=ABCMeta):
+    __wrapper__: Callable = None
 
-class IterOpBase(metaclass=ABCMeta):
+    def __init__(self, data: np.ndarray, blen: int = None, outcol: Sequence[str] = (), callback: Callable[[Self],None] = __void__):
+        self.data, self.blen, self.dlen, self.callback = data, blen or data.shape[0], data.shape[0]//blen, callback
+        sample = self(self.data[:8], slice(0,8))
+        if isinstance(sample, np.ndarray):
+            IterOps.__wrapper__ = self.__array_result__
+        elif isinstance(sample, Sequence):
+            IterOps.__wrapper__ = self.__list_result__
+            sample = np.concat(sample, axis=-1)
+        else:
+            IterOps.__wrapper__ = self.__ignore_result__
+            return
+        nclmns = sample.shape[-1]
+        self.result = np.empty(self.data.shape[:-1]+(nclmns,))
+        self.outcol = (tuple(outcol)+tuple(f'{self.__class__.__name__.lower()}_{char}' for char in ascii_lowercase[:max(nclmns-len(outcol),0)]))[:nclmns]
+        self.__class__.__call__ = self.__class__.__redecor__(self.__class__.__call__)
 
-    @property
-    @abstractmethod
-    def columns(self) -> Iterable[str]:...
-    @property
-    @abstractmethod
-    def index(self) -> Iterable[Any]|pd.Index:...
-    @abstractmethod
-    def __call__(self, batch: np.ndarray) -> np.ndarray:...
-
-    def __init__(self, dimm: DimmBase, blen: int = None, leap: int = 1):
-        self.dimm, self.blen, self.leap = dimm, blen or dimm.wdat.shape[0], leap
     def __len__(self) -> int:
-        return self.dimm.wdat.shape[0]//self.blen
-    def __iter__(self) -> np.ndarray:
-        blen = self.dimm.wdat.shape[0]//self.blen
-        dlen = blen*self.blen
-        asym = self.dimm.wdat.shape[0]-dlen
-        yield from ([self.dimm.wdat[:asym]] if asym else [])+np.vsplit(self.dimm.wdat[-dlen:], blen)
+        return self.dlen
 
+    def __iter__(self) -> slice:
+        yield from (slice(idex,idex+self.blen) for idex in range(0, self.data.shape[0], self.blen))
 
+    @classmethod
+    def make(cls, name: str, call: Callable[[np.ndarray,slice,...],np.ndarray|Sequence[np.ndarray]|Mapping[str,np.ndarray]|pd.DataFrame|pd.Series]):
+        type(name or "IterOpLmbd", )
 
+    def __ignore_result__(self, result: np.ndarray = None, slicer: slice = slice(None), /, **kwargs):...
 
-class RunOpMeta(type):
-    __inst__: dict[type ,object] = dict()
-    def __call__(cls, *args, **kwargs):
-        return cls.__inst__.get(cls, None) or cls.__inst__.setdefault(cls, super(RunOpMeta, cls).__call__(*args, **kwargs))
-    def __iter__(cls):
-        yield from cls.__inst__.items()
+    def __array_result__(self, result: np.ndarray = None, slicer: slice = slice(None), /, **kwargs):
+        self.result[slicer] = result[..., :self.result.shape[-1]]
+        return self.result[slicer]
 
-class RunOper(metaclass=RunOpMeta):
+    def __list_result__(self, result: Sequence[np.ndarray] = None, slicer: slice = slice(None), /, **kwargs):
+        for idex in (idex for idex in range(self.result.shape[-1]) if idex < len(result)):
+            self.result[slicer, ..., idex] = result[idex]
+        return self.result[slicer]
 
-    __moni__: dict[str,Any] = dict()
-    @property
-    def moni(self) -> dict[str,Any]:
-        return self.__moni__
-    @moni.setter
-    def moni(self, open: int):
-        self.__moni__ = dict(open=open, done=0)
+    @staticmethod
+    def __redecor__(func: Callable) -> Callable:
+        def wrapper(self, slicer: slice, /, **kwargs):
+            return IterOps.__wrapper__(func(self, data=self.data[slicer], slicer=slicer, **kwargs), slicer, **kwargs)
+        return wrapper
 
-    class ThreadExec(ThreadPoolExecutor):
-        def __call__(self, cb, *args, **kwargs):
-            self.callback = cb
-            return self
-        def submit(self, fn, /, *args, **kwargs):
-            future = super(RunOper.ThreadExec, self).submit(fn, *args, **kwargs)
-            future.add_done_callback(self.callback)
-            return future
-
-    def __init__(self, maxw: int = None):
-        self.maxw: int = maxw or round(os.cpu_count()*0.75)
-        self.moni, self.barr = 0, 1000
-    def __call__(self, iterop: IterOpBase, **kwargs) -> OubdType:
-        self.moni = len(iterop)
-        #with ThreadPoolExecutor(max_workers=kwargs.pop("maxw", self.maxw), thread_name_prefix=self.__class__.__name__) as executor:
-        with RunOper.ThreadExec(max_workers=kwargs.pop("maxw", self.maxw), thread_name_prefix=self.__class__.__name__)(self.callback) as executor:
-            pass
-            futures: list[Future] = [executor.submit(iterop, *(item,), **kwargs) for item in iterop]
-            pass
-            futures: np.ndarray = np.concat([f.result() for f in futures], axis=0)
-            pass
-            return futures, iterop.columns, iterop.index
-
-    def callback(self, done: Future, *args, **kwargs):
-        self.moni["done"] += 1
-        self.barr -= 1
-        if not self.barr:
-            print(f'{self.moni["open"]} / {self.moni["done"]} / {self.moni["open"]-self.moni["done"]} / {round(self.moni["done"]/self.moni["open"]*100,2)}%')
-            self.barr = 1000
-
-
-
-
-class IterOps(IterOpBase):
-    @property
-    def columns(self) -> Iterable[str]:
-        return tuple(self.dimm.root.feld.keys())
-    @property
-    def index(self) -> Iterable[Any]|pd.Index:
-        return range(self.dimm.wdat.shape[0])
+    @__redecor__
     @abstractmethod
-    def __call__(self, batch: np.ndarray) -> np.ndarray:...
+    def __call__(self, data: np.ndarray, slicer: slice, **kwargs) -> np.ndarray:...
 
-    def RunOper(self, maxw: int = None) -> OubdType:
-        return RunOper(maxw)(self)
+
+
+class Tether(ABCMeta, type(Thread)):
+    __instance__: Thread = None
+    #__fetchlock__: Event = Event()
+    __fetchlock__: RLock = RLock()
+    __mxworkers__: int = os.cpu_count()*0.75
+    __iteropers__: MutableSequence[IterOps] = list()
+    def __call__(cls, *iterops: IterOps, workers: int = None, **kwargs):
+        cls.__mxworkers__ = max(2,workers or cls.__mxworkers__)
+        cls.__iteropers__.extend(list(iterops))
+        cls.__instance__ = cls.__instance__ or super(Tether, cls).__call__(*iterops, **kwargs)
+        return cls.__instance__.run()
+        #return cls.__instance__.start()
+
+
+
+class RunOper(Thread, metaclass=Tether):
+    @property
+    def fetchlock(self) -> RLock:
+        return self.__class__.__fetchlock__
+    @property
+    def maxworkers(self) -> int:
+        return self.__class__.__mxworkers__
+    @property
+    def iteropers(self) -> MutableSequence[IterOps]:
+        self.fetchlock.acquire(timeout=2)
+        self.fetchlock.release()
+        return self.__class__.__iteropers__
+    @iteropers.deleter
+    def iteropers(self):
+        self.__class__.__iteropers__ = list()
+    def __init__(self, *args, **kwargs):
+        super(RunOper, self).__init__(target=self, name=self.__class__.__name__, daemon=False)
+    def __bool__(self) -> bool:
+        return self.is_alive()
+    def __iter__(self):
+        while self.iteropers:
+            with self.fetchlock:
+                iteropers = tuple(self.iteropers)
+                del self.iteropers
+            yield from iteropers
+    def __call__(self, *args, **kwargs):
+        for iterop in self:
+            with ThreadPoolExecutor(max_workers=self.maxworkers-1, thread_name_prefix=self.name) as runner:
+                runner.map(iterop, iterop)
+            iterop.callback(iterop=iterop)
+
+        self.free()
+    def start(self) -> Self:
+        self._started.is_set() or super(RunOper, self).start()
+        return self
+    def free(self, *args, **kwargs):
+        """ palestine """
+        self.__class__.__instance__ = None
+
+
+
+
+

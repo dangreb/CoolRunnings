@@ -13,4 +13,4 @@
 
 """
 
-from coolruns.persistor.persistor import PersistentAccessor, gcollect
+from coolruns.persistor.persistor import *
